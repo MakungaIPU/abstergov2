@@ -1,16 +1,33 @@
 name: Build APK
-on: workflow_dispatch
+on:
+  push:
+  workflow_dispatch:
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: unzip -q "$(find . -name '*.zip' | head -1)"
+      - name: Aplicar zip del proyecto si existe
+        run: |
+          Z=$(find . -maxdepth 2 -iname '*.zip' -not -path './.git/*' | head -1)
+          if [ -n "$Z" ]; then
+            rm -rf /tmp/n && mkdir /tmp/n && unzip -q "$Z" -d /tmp/n
+            D=$(dirname "$(find /tmp/n -name settings.gradle.kts | head -1)")
+            cp -r "$D"/. .
+          fi
+      - name: Localizar proyecto
+        run: echo "PROJECT_DIR=$(dirname "$(find . -name settings.gradle.kts -not -path './.git/*' | head -1)")" >> $GITHUB_ENV
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: gradle/actions/setup-gradle@v4
         with: { gradle-version: 8.7 }
-      - run: gradle assembleDebug
-        working-directory: Abstergo
+      - name: Generar gradlew
+        run: gradle wrapper --gradle-version 8.7
+        working-directory: ${{ env.PROJECT_DIR }}
+      - name: Compilar APK
+        run: ./gradlew assembleDebug
+        working-directory: ${{ env.PROJECT_DIR }}
       - uses: actions/upload-artifact@v4
-        with: { name: abstergo-apk, path: Abstergo/app/build/outputs/apk/debug/app-debug.apk }
+        with:
+          name: abstergo-apk
+          path: ${{ env.PROJECT_DIR }}/app/build/outputs/apk/debug/app-debug.apk
